@@ -14,6 +14,7 @@ def main():
     tier_data = {
         'Tier': ['Silver', 'Gold', 'Diamond', 'Platinum'],
         'Minimum Order (g)': ['6,000g', '66,050g', '126,050g', '246,050g'],
+        'Master Cases (6000g each)': ['1', '11', '21', '41'],
         'ROI %': ['5%', '7%', '9%', '13%'],
         'Special Requirements': [
             'None',
