@@ -1,12 +1,11 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from models import CustomerType, Offer
-from algorithms import calculate_budget_from_roi
 
-# Define constants that could be turned into variables
+# Define constants for pricing and packaging
 PRICE_50G_MC = 3936  # Price for 1 Master Case of 50g (120 packs)
 PRICE_250G_MC = 4243.5  # Price for 1 Master Case of 250g (24 packs)
 PRICE_1KG_MC = 3833  # Price for 1 Master Case of 1kg (6 packs)
@@ -15,7 +14,6 @@ PACKS_50G_MC = 120  # Packs per Master Case of 50g
 PACKS_250G_MC = 24  # Packs per Master Case of 250g
 PACKS_1KG_MC = 6    # Packs per Master Case of 1kg
 
-# Function to calculate order value and gifts based on master cases
 def calculate_investment(
     total_master_cases,
     mc_50g_percent,
@@ -86,7 +84,6 @@ def calculate_investment(
     # Net revenue after gifts
     net_revenue = total_value - total_budget
     
-    # Return comprehensive results
     return {
         "master_cases": {
             "50g": mc_50g,
@@ -141,6 +138,8 @@ def calculate_investment(
     }
 
 def main():
+    st.title("Investment Calculator")
+    
     # Create two columns for the sidebar
     col1, col2 = st.columns([1, 1])
 
@@ -156,9 +155,9 @@ def main():
         
         # Create expandable section for product mix
         with st.expander("Product Mix Percentages (must sum to 100%)", expanded=True):
-            mc_50g_percent = st.slider("50g Master Cases %", 0, 100, 85)
-            mc_250g_percent = st.slider("250g Master Cases %", 0, 100, 10)
-            mc_1kg_percent = st.slider("1kg Master Cases %", 0, 100, 5)
+            mc_50g_percent = st.slider("50g Master Cases %", 0, 100, 85, key="mc_50g")
+            mc_250g_percent = st.slider("250g Master Cases %", 0, 100, 10, key="mc_250g")
+            mc_1kg_percent = st.slider("1kg Master Cases %", 0, 100, 5, key="mc_1kg")
             
             # Validate that percentages sum to 100%
             product_sum = mc_50g_percent + mc_250g_percent + mc_1kg_percent
@@ -170,8 +169,8 @@ def main():
         
         # Create expandable section for customer distribution
         with st.expander("Customer Type Percentages (must sum to 100%)", expanded=True):
-            retail_percent = st.slider("Retail Customers %", 0, 100, 50)
-            tobacco_shop_percent = st.slider("Tobacco Shop Customers %", 0, 100, 50)
+            retail_percent = st.slider("Retail Customers %", 0, 100, 50, key="retail")
+            tobacco_shop_percent = st.slider("Tobacco Shop Customers %", 0, 100, 50, key="tobacco")
             
             # Validate that percentages sum to 100%
             customer_sum = retail_percent + tobacco_shop_percent
@@ -180,10 +179,10 @@ def main():
         
         # Create expandable section for tier distribution
         with st.expander("Tier Distribution Percentages (must sum to 100%)", expanded=True):
-            silver_percent = st.slider("Silver Tier %", 0, 100, 80)
-            gold_percent = st.slider("Gold Tier %", 0, 100, 10)
-            diamond_percent = st.slider("Diamond Tier %", 0, 100, 7)
-            platinum_percent = st.slider("Platinum Tier %", 0, 100, 3)
+            silver_percent = st.slider("Silver Tier %", 0, 100, 80, key="silver")
+            gold_percent = st.slider("Gold Tier %", 0, 100, 10, key="gold")
+            diamond_percent = st.slider("Diamond Tier %", 0, 100, 7, key="diamond")
+            platinum_percent = st.slider("Platinum Tier %", 0, 100, 3, key="platinum")
             
             # Validate that percentages sum to 100%
             tier_sum = silver_percent + gold_percent + diamond_percent + platinum_percent
@@ -216,135 +215,101 @@ def main():
             st.metric("Total Gift Budget", f"${results['gift_budgets']['total']:,.2f}")
         with metric_cols[2]:
             st.metric("Net Revenue", f"${results['net_revenue']:,.2f}")
+        
+        # Display detailed analysis with tabs
+        tabs = st.tabs(["Product Analysis", "Customer Analysis", "ROI Analysis"])
+        
+        with tabs[0]:
+            # Product mix pie chart
+            product_values = pd.DataFrame({
+                'Product': ['50g MC', '250g MC', '1kg MC'],
+                'Value': [results['value']['50g'], results['value']['250g'], results['value']['1kg']]
+            })
+            fig = px.pie(product_values, values='Value', names='Product', title='Order Value by Product')
+            st.plotly_chart(fig, use_container_width=True)
             
-        # ROI information
-        st.subheader("ROI Analysis")
-        st.info(f"Weighted Average ROI: {results['roi_summary']['weighted_average']:.2f}%")
-        
-        roi_data = {
-            'Tier': ['Silver', 'Gold', 'Diamond', 'Platinum'],
-            'ROI (%)': [
-                results['roi_summary']['silver'],
-                results['roi_summary']['gold'],
-                results['roi_summary']['diamond'],
-                results['roi_summary']['platinum']
-            ],
-            'Distribution (%)': [
-                silver_percent, 
-                gold_percent, 
-                diamond_percent, 
-                platinum_percent
-            ],
-            'Order Value ($)': [
-                results['tier_segments']['silver'],
-                results['tier_segments']['gold'],
-                results['tier_segments']['diamond'],
-                results['tier_segments']['platinum']
-            ],
-            'Gift Budget ($)': [
-                results['gift_budgets']['silver'],
-                results['gift_budgets']['gold'],
-                results['gift_budgets']['diamond'],
-                results['gift_budgets']['platinum']
-            ],
-        }
-        
-        roi_df = pd.DataFrame(roi_data)
-        st.dataframe(roi_df.style.format({
-            'ROI (%)': '{:.1f}',
-            'Distribution (%)': '{:.1f}',
-            'Order Value ($)': '${:,.2f}',
-            'Gift Budget ($)': '${:,.2f}'
-        }))
-        
-        # Create visualizations
-        st.subheader("Visualizations")
-        viz_tabs = st.tabs(["Order Value", "Gift Budget", "Customer Analysis"])
-        
-        with viz_tabs[0]:
-            # Order value by product
-            product_value_data = {
-                'Product': ['50g', '250g', '1kg'],
+            # Product details table
+            st.write("Product Details:")
+            product_details = pd.DataFrame({
+                'Product': ['50g MC', '250g MC', '1kg MC', 'Total'],
+                'Master Cases': [
+                    f"{results['master_cases']['50g']:.1f}",
+                    f"{results['master_cases']['250g']:.1f}",
+                    f"{results['master_cases']['1kg']:.1f}",
+                    f"{results['master_cases']['total']:.1f}"
+                ],
                 'Value': [
-                    results['value']['50g'],
-                    results['value']['250g'],
-                    results['value']['1kg']
+                    f"${results['value']['50g']:,.2f}",
+                    f"${results['value']['250g']:,.2f}",
+                    f"${results['value']['1kg']:,.2f}",
+                    f"${results['value']['total']:,.2f}"
+                ],
+                'Weight (kg)': [
+                    f"{results['weight_grams']['50g']/1000:,.1f}",
+                    f"{results['weight_grams']['250g']/1000:,.1f}",
+                    f"{results['weight_grams']['1kg']/1000:,.1f}",
+                    f"{results['weight_grams']['total']/1000:,.1f}"
                 ]
-            }
-            product_value_df = pd.DataFrame(product_value_data)
+            })
+            st.dataframe(product_details, use_container_width=True)
             
-            # Stacked bar chart for order value by tier and product
-            order_fig = px.bar(
-                product_value_df,
-                x='Product',
-                y='Value',
-                title='Order Value by Product Size',
-                color='Product',
-                height=400
-            )
-            order_fig.update_layout(yaxis_title="Order Value ($)")
-            st.plotly_chart(order_fig, use_container_width=True)
+        with tabs[1]:
+            # Customer distribution
+            customer_cols = st.columns(2)
+            with customer_cols[0]:
+                st.metric("Retail Value", f"${results['customer_segments']['retail']:,.2f}")
+                st.metric("Retail Gift Budget", f"${results['gift_budgets']['retail']:,.2f}")
+            with customer_cols[1]:
+                st.metric("Tobacco Shop Value", f"${results['customer_segments']['tobacco_shop']:,.2f}")
+                st.metric("Tobacco Shop Gift Budget", f"${results['gift_budgets']['tobacco_shop']:,.2f}")
             
-        with viz_tabs[1]:
-            # Gift budget visualizations
-            budget_data = {
-                'Category': ['Silver', 'Gold', 'Diamond', 'Platinum'],
-                'Budget': [
+            # Customer comparison bar chart
+            customer_data = pd.DataFrame({
+                'Customer Type': ['Retail', 'Tobacco Shop'],
+                'Order Value': [results['customer_segments']['retail'], results['customer_segments']['tobacco_shop']],
+                'Gift Budget': [results['gift_budgets']['retail'], results['gift_budgets']['tobacco_shop']]
+            })
+            fig = px.bar(customer_data, x='Customer Type', y=['Order Value', 'Gift Budget'],
+                        title='Customer Segment Comparison', barmode='group')
+            st.plotly_chart(fig, use_container_width=True)
+            
+        with tabs[2]:
+            # ROI summary
+            st.metric("Weighted Average ROI", f"{results['roi_summary']['weighted_average']:.2f}%")
+            
+            # ROI by tier
+            roi_data = pd.DataFrame({
+                'Tier': ['Silver', 'Gold', 'Diamond', 'Platinum'],
+                'ROI %': [
+                    results['roi_summary']['silver'],
+                    results['roi_summary']['gold'],
+                    results['roi_summary']['diamond'],
+                    results['roi_summary']['platinum']
+                ],
+                'Value': [
+                    results['tier_segments']['silver'],
+                    results['tier_segments']['gold'],
+                    results['tier_segments']['diamond'],
+                    results['tier_segments']['platinum']
+                ],
+                'Gift Budget': [
                     results['gift_budgets']['silver'],
                     results['gift_budgets']['gold'],
                     results['gift_budgets']['diamond'],
                     results['gift_budgets']['platinum']
                 ]
-            }
-            budget_df = pd.DataFrame(budget_data)
+            })
             
-            # Pie chart for gift budget distribution
-            budget_fig = px.pie(
-                budget_df,
-                values='Budget',
-                names='Category',
-                title='Gift Budget Distribution by Tier',
-                hole=0.4
-            )
-            budget_fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(budget_fig, use_container_width=True)
+            # ROI comparison chart
+            fig = px.bar(roi_data, x='Tier', y=['Value', 'Gift Budget'],
+                        title='Value and Gift Budget by Tier', barmode='group')
+            st.plotly_chart(fig, use_container_width=True)
             
-        with viz_tabs[2]:
-            # Customer type analysis
-            customer_value_data = {
-                'Customer Type': ['Retail', 'Tobacco Shop'],
-                'Order Value': [
-                    results['customer_segments']['retail'],
-                    results['customer_segments']['tobacco_shop']
-                ],
-                'Gift Budget': [
-                    results['gift_budgets']['retail'],
-                    results['gift_budgets']['tobacco_shop']
-                ]
-            }
-            customer_df = pd.DataFrame(customer_value_data)
-            
-            # Bar chart comparing order values and gift budgets by customer type
-            customer_fig = px.bar(
-                customer_df,
-                x='Customer Type',
-                y=['Order Value', 'Gift Budget'],
-                title='Order Value and Gift Budget by Customer Type',
-                barmode='group',
-                height=400
-            )
-            customer_fig.update_layout(yaxis_title="Amount ($)")
-            st.plotly_chart(customer_fig, use_container_width=True)
-            
-            # Calculate and display percentages
-            retail_roi_percent = (results['gift_budgets']['retail'] / results['customer_segments']['retail']) * 100 if results['customer_segments']['retail'] > 0 else 0
-            tobacco_roi_percent = (results['gift_budgets']['tobacco_shop'] / results['customer_segments']['tobacco_shop']) * 100 if results['customer_segments']['tobacco_shop'] > 0 else 0
-            
-            roi_cols = st.columns(2)
-            with roi_cols[0]:
-                st.metric("Retail ROI", f"{retail_roi_percent:.2f}%")
-            with roi_cols[1]:
-                st.metric("Tobacco Shop ROI", f"{tobacco_roi_percent:.2f}%")
+            # ROI details table
+            roi_data['ROI %'] = roi_data['ROI %'].map('{:.1f}%'.format)
+            roi_data['Value'] = roi_data['Value'].map('${:,.2f}'.format)
+            roi_data['Gift Budget'] = roi_data['Gift Budget'].map('${:,.2f}'.format)
+            st.dataframe(roi_data, use_container_width=True)
 
 if __name__ == "__main__":
     main()

@@ -459,7 +459,7 @@ def main():
         
         with col2:
             if not use_default_data:
-                uploaded_file = st.file_uploader("Upload Price Data (CSV)", type=["csv"])
+                uploaded_file = st.file_uploader("Upload Price Data (CSV)", type=["csv"], key="trade_offer_uploader")
                 if uploaded_file is not None:
                     try:
                         data = load_csv(uploaded_file)
