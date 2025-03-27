@@ -8,6 +8,7 @@ deploymentTarget = "autoscale"
 run = ["sh", "-c", "streamlit run app.py --server.port 5000"]
 
 [workflows]
+runButton = "Run App"
 
 [[workflows.workflow]]
 name = "Project"
@@ -32,6 +33,15 @@ task = "packager.installForAll"
 task = "shell.exec"
 args = "streamlit run main.py --server.port 5000"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Run App"
+author = 40924181
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run main.py --server.port 5000"
 
 [[ports]]
 localPort = 5000

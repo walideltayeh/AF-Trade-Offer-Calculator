@@ -34,71 +34,7 @@ def get_svg_icon():
         b64 = base64.b64encode(svg_code.encode('utf-8')).decode('utf-8')
         return f'data:image/svg+xml;base64,{b64}'
 
-# Function to toggle between light and dark theme
-def toggle_theme():
-    # Path to the config file
-    config_path = '.streamlit/config.toml'
-    
-    # Check if dark mode is already enabled
-    if 'theme_is_dark' not in st.session_state:
-        # Initialize to False by default to start with light theme
-        st.session_state.theme_is_dark = False
-    
-    # Toggle the theme state
-    st.session_state.theme_is_dark = not st.session_state.theme_is_dark
-    
-    # Define the themes
-    dark_theme = """
-[theme]
-primaryColor = "#FF4E50"
-backgroundColor = "#1E1E1E"
-secondaryBackgroundColor = "#31333F"
-textColor = "#FAFAFA"
-font = "sans serif"
-"""
-    
-    light_theme = """
-[theme]
-primaryColor = "#FF4E50"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#262730"
-font = "sans serif"
-"""
-    
-    # Server configuration
-    server_config = """
-[server]
-headless = true
-address = "0.0.0.0"
-port = 5000
-"""
-    
-    # Write appropriate theme to the config file
-    with open(config_path, 'w') as f:
-        f.write(server_config)
-        f.write('\n')
-        if st.session_state.theme_is_dark:
-            f.write(dark_theme)
-        else:
-            f.write(light_theme)
-    
-    # Use Python to restart the Streamlit server via an OS command
-    # This is a more reliable way to restart the server
-    try:
-        import os
-        import signal
-        import sys
-        import time
-        
-        # Set a flag in session state to indicate that theme was toggled
-        st.session_state.theme_toggled = True
-        
-        # Return True to indicate rerun is needed
-        return True
-    except Exception as e:
-        st.error(f"Error toggling theme: {str(e)}")
-        return False
+
 
 # Set page configuration with custom icon - must be first Streamlit command
 st.set_page_config(
@@ -184,19 +120,7 @@ def main():
             st.subheader("Explanation")
             st.write("""This section details the calculation methods and tier system.""")
         
-        # Add theme toggle button
-        st.markdown("---")
-        st.subheader("Theme Settings")
         
-        # Get current theme status
-        current_theme = "Dark" if st.session_state.get('theme_is_dark', True) else "Light"
-        
-        # Create a toggle button
-        if st.button(f"Switch to {'Light' if current_theme == 'Dark' else 'Dark'} Theme"):
-            # Toggle theme
-            if toggle_theme():
-                st.success(f"Theme changed to {'Light' if not st.session_state.theme_is_dark else 'Dark'}! The app will restart to apply changes.")
-                st.rerun()
 
 
     # Main area - Import and run the selected app
