@@ -26,16 +26,14 @@ def recommend_gift(order_data, customer_type, budget):
         return {
             "Pack FOC": 0,
             "Hookah": 0,
-            "AF Points": 0,
-            "Cash Back %": 0
+            "AF Points": 0
         }
     
     # Initialize gifts
     gifts = {
         "Pack FOC": 0,
         "Hookah": 0,
-        "AF Points": 0,
-        "Cash Back %": 0
+        "AF Points": 0
     }
     
     # Calculate total packs
@@ -64,20 +62,17 @@ def recommend_gift(order_data, customer_type, budget):
                 gifts["Hookah"] = 1
                 budget -= 400
         
-        # Allocate remaining budget between Pack FOC, AF Points, and Cash Back
-        remaining_allocation = np.array([0.5, 0.3, 0.2])  # Pack FOC, AF Points, Cash Back
+        # Allocate remaining budget between Pack FOC and AF Points (70/30 split)
+        # Removed Cash Back allocation and redistributed to other gift types
+        remaining_allocation = np.array([0.7, 0.3])  # Pack FOC, AF Points
         
-        # Calculate Pack FOC based on 50% of remaining budget
+        # Calculate Pack FOC based on 70% of remaining budget
         pack_foc_budget = remaining_allocation[0] * budget
         gifts["Pack FOC"] = math.floor(pack_foc_budget / 38)
         
         # Calculate AF Points based on 30% of remaining budget
         af_points_budget = remaining_allocation[1] * budget
         gifts["AF Points"] = math.floor(af_points_budget)
-        
-        # Calculate Cash Back based on 20% of remaining budget
-        cashback_budget = remaining_allocation[2] * budget
-        gifts["Cash Back %"] = min(30, round((cashback_budget / total_value) * 100, 1)) if total_value > 0 else 0
     
     return gifts
 
@@ -124,8 +119,7 @@ def optimize_budget(order_data, customer_type, target_roi_percentage):
         return {
             "Pack FOC": 0,
             "Hookah": 0,
-            "AF Points": 0,
-            "Cash Back %": 0
+            "AF Points": 0
         }
     
     # Calculate budget needed for target ROI
@@ -139,8 +133,7 @@ def optimize_budget(order_data, customer_type, target_roi_percentage):
     current_budget_usage = (
         gifts["Pack FOC"] * 38 +
         gifts["Hookah"] * 400 +
-        gifts["AF Points"] * 1 +
-        (gifts["Cash Back %"] / 100) * total_value
+        gifts["AF Points"] * 1
     )
     
     # Try to optimize budget usage
@@ -156,12 +149,6 @@ def optimize_budget(order_data, customer_type, target_roi_percentage):
     if remaining_budget > 1:
         additional_points = math.floor(remaining_budget)
         gifts["AF Points"] += additional_points
-        remaining_budget -= additional_points
-    
-    # If tiny amount left, add to Cash Back
-    if remaining_budget > 0 and total_value > 0:
-        additional_cashback = (remaining_budget / total_value) * 100
-        gifts["Cash Back %"] = min(30, gifts["Cash Back %"] + additional_cashback)
     
     return gifts
 
@@ -184,11 +171,11 @@ def calculate_roi(order_data, gifts, budget):
         return 0
     
     # Calculate the actual cost of all the gifts
+    # Removed Cash Back from calculation
     actual_cost = (
         gifts.get("Pack FOC", 0) * 38 +
         gifts.get("Hookah", 0) * 400 +
-        gifts.get("AF Points", 0) * 1 +
-        (gifts.get("Cash Back %", 0) / 100) * total_value
+        gifts.get("AF Points", 0) * 1
     )
     
     # ROI is simply the percentage of the total order value that is being given as gifts

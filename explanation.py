@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -49,9 +48,8 @@ def main():
     - If budget ≥ $400 and order weight > 50kg: 1 hookah
     
     2. **Remaining Budget Distribution**
-    - 50% for Pack FOC (Free of Charge Packs)
-    - 30% for AF Points
-    - 20% for Cash Back
+    - 60% for Pack FOC (Free of Charge Packs)
+    - 40% for AF Points
     
     Each Pack FOC costs $38 in the calculation.
     """)
@@ -76,9 +74,20 @@ def main():
     - Number of FOC Packs × $38
     - Number of Hookahs × $400
     - AF Points (1 point = $1)
-    - Cash Back Amount
     ```
     """)
 
+# Function to create a developer footer for the app
+def add_developer_footer():
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: gray; padding: 10px;'>"
+        "Developed by Walid El Tayeh"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
 if __name__ == "__main__":
     main()
+    # Add developer footer
+    add_developer_footer()

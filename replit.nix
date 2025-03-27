@@ -1,7 +1,5 @@
 {pkgs}: {
   deps = [
-    pkgs.curl
-    pkgs.glibcLocales
     pkgs.zlib
     pkgs.tk
     pkgs.tcl
@@ -13,5 +11,6 @@
     pkgs.libimagequant
     pkgs.lcms2
     pkgs.freetype
+    pkgs.glibcLocales
   ];
 }

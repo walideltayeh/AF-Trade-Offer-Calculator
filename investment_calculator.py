@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -311,5 +310,17 @@ def main():
             roi_data['Gift Budget'] = roi_data['Gift Budget'].map('${:,.2f}'.format)
             st.dataframe(roi_data, use_container_width=True)
 
+# Function to create a developer footer for the app
+def add_developer_footer():
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: gray; padding: 10px;'>"
+        "Developed by Walid El Tayeh"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
 if __name__ == "__main__":
     main()
+    # Add developer footer
+    add_developer_footer()

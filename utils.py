@@ -94,9 +94,9 @@ def calculate_gift_value(gift_type, quantity, order_value=0):
     Calculate the monetary value of a gift
     
     Args:
-        gift_type (str): Type of gift (Pack FOC, Hookah, AF Points, Cash Back %)
-        quantity (float): Quantity or percentage of the gift
-        order_value (float): Total order value, required for Cash Back calculation
+        gift_type (str): Type of gift (Pack FOC, Hookah, AF Points)
+        quantity (float): Quantity of the gift
+        order_value (float): Total order value (not used anymore)
         
     Returns:
         float: Monetary value of the gift
@@ -108,9 +108,6 @@ def calculate_gift_value(gift_type, quantity, order_value=0):
     elif gift_type == "AF Points":
         # Assume 1 AF Point is worth $1
         return quantity * 1
-    elif gift_type == "Cash Back %":
-        # Calculate cash back based on percentage
-        return (quantity / 100) * order_value
     return 0
 
 def get_max_gift_quantities(budget, customer_type, order_value):
@@ -120,15 +117,14 @@ def get_max_gift_quantities(budget, customer_type, order_value):
     Args:
         budget (float): Available budget
         customer_type (CustomerType): Type of customer
-        order_value (float): Total order value
+        order_value (float): Total order value (not used anymore)
         
     Returns:
         dict: Maximum quantities for each gift type
     """
     max_quantities = {
         "Pack FOC": int(budget / 38),
-        "AF Points": int(budget / 1),  # Assuming 1 point = $1
-        "Cash Back %": min(30, (budget / order_value) * 100 if order_value > 0 else 0)
+        "AF Points": int(budget / 1)  # Assuming 1 point = $1
     }
     
     # Only Tobacco Shops can get hookahs
