@@ -108,14 +108,27 @@ def main():
             """)
         elif selected_app == "Investment Calculator":
             st.subheader("Investment Calculator")
-            st.write("""
-            Analyze investment requirements for the gift program:
-            - Calculate ROI across customer tiers
-            - Visualize budget allocation
-            - Forecast gift expenditure
-            - Understand net revenue impact
-            - Optimize gift strategy
-            """)
+            
+            # Initialize password in session state if not present
+            if 'investment_password' not in st.session_state:
+                st.session_state.investment_password = ''
+            
+            # Get password input
+            password = st.text_input("Enter password", type="password", key="password_input")
+            if password:  # Only update if password was entered
+                st.session_state.investment_password = password
+            
+            if st.session_state.investment_password == "alfakher2024":  # You can change this password
+                st.write("""
+                Analyze investment requirements for the gift program:
+                - Calculate ROI across customer tiers
+                - Visualize budget allocation
+                - Forecast gift expenditure
+                - Understand net revenue impact
+                - Optimize gift strategy
+                """)
+            else:
+                st.error("Please enter the correct password to access this section")
         else: #explanation tab
             st.subheader("Explanation")
             st.write("""This section details the calculation methods and tier system.""")
@@ -201,10 +214,14 @@ def main():
             app_module.main()
     elif selected_app == "Investment Calculator":
         st.write("## Investment Calculator")
-        # Import investment calculator module
-        app_module = importlib.import_module(APPS[selected_app])
-        if hasattr(app_module, 'main'):
-            app_module.main()
+        password = st.session_state.get('investment_password', '')
+        if password == "alfakher2024":  # Use the same password as above
+            # Import investment calculator module
+            app_module = importlib.import_module(APPS[selected_app])
+            if hasattr(app_module, 'main'):
+                app_module.main()
+        else:
+            st.error("Please enter the correct password in the sidebar to access this section")
     else:
         st.write("## Explanation")
         app_module = importlib.import_module(APPS[selected_app])
