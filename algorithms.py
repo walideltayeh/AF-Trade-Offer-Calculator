@@ -1,6 +1,6 @@
-import numpy as np
 import math
 from models import CustomerType
+from utils import calculate_gift_value, get_max_gift_quantities
 
 def recommend_gift(order_data, customer_type, budget):
     """
@@ -14,67 +14,42 @@ def recommend_gift(order_data, customer_type, budget):
     Returns:
         dict: Recommended gift quantities
     """
-    # Check eligibility
-    quantities = order_data["quantities"]
-    is_eligible = (
-        quantities.get("50g", 0) >= 10 or
-        quantities.get("250g", 0) >= 3 or
-        quantities.get("1kg", 0) >= 2
-    )
+    # Initialize gift quantities
+    gift_quantities = {"Pack FOC": 0, "Hookah": 0}
     
-    if not is_eligible:
-        return {
-            "Pack FOC": 0,
-            "Hookah": 0,
-            "AF Points": 0
-        }
+    # Get maximum gift quantities based on budget
+    max_quantities = get_max_gift_quantities(budget, customer_type, order_data['total_value'])
     
-    # Initialize gifts
-    gifts = {
-        "Pack FOC": 0,
-        "Hookah": 0,
-        "AF Points": 0
-    }
+    # Calculate total order weight
+    total_order_weight_g = sum([
+        order_data["quantities"].get("50g", 0) * 50,
+        order_data["quantities"].get("250g", 0) * 250,
+        order_data["quantities"].get("1kg", 0) * 1000
+    ])
     
-    # Calculate total packs
-    total_packs = sum(quantities.values())
-    total_value = order_data["total_value"]
+    # Convert to kg for easier comparison
+    total_order_weight_kg = total_order_weight_g / 1000
     
-    # FLOOR_MATH formula for gift allocation
-    # The logic here is to allocate budget proportionally based on order size and value
+    # For Tobacco Shops, allocate hookahs first if applicable
+    remaining_budget = budget
     
-    # Step 1: Calculate weighted score based on pack quantities and sizes
-    weight_50g = quantities.get("50g", 0) * 1
-    weight_250g = quantities.get("250g", 0) * 5
-    weight_1kg = quantities.get("1kg", 0) * 20
-    weight_total = weight_50g + weight_250g + weight_1kg
+    if customer_type == CustomerType.TOBACCO_SHOP:
+        # Allocate hookahs based on order weight and budget
+        if total_order_weight_kg > 100 and remaining_budget >= 800:
+            # Up to 2 hookahs for orders over 100kg
+            gift_quantities["Hookah"] = min(2, max_quantities["Hookah"])
+            remaining_budget -= gift_quantities["Hookah"] * 400
+        elif total_order_weight_kg > 50 and remaining_budget >= 400:
+            # 1 hookah for orders over 50kg
+            gift_quantities["Hookah"] = 1
+            remaining_budget -= 400
     
-    # Step 2: Allocate budget based on weights
-    if weight_total > 0:
-        # For Tobacco Shops, consider Hookah
-        if customer_type == CustomerType.TOBACCO_SHOP and budget >= 400:
-            # If budget and order size is large enough, allocate hookah
-            if weight_total > 100 and budget > 800:
-                hookah_count = min(2, math.floor(budget / 400))
-                gifts["Hookah"] = hookah_count
-                budget -= hookah_count * 400
-            elif weight_total > 50:
-                gifts["Hookah"] = 1
-                budget -= 400
-        
-        # Allocate remaining budget between Pack FOC and AF Points (70/30 split)
-        # Removed Cash Back allocation and redistributed to other gift types
-        remaining_allocation = np.array([0.7, 0.3])  # Pack FOC, AF Points
-        
-        # Calculate Pack FOC based on 70% of remaining budget
-        pack_foc_budget = remaining_allocation[0] * budget
-        gifts["Pack FOC"] = math.floor(pack_foc_budget / 38)
-        
-        # Calculate AF Points based on 30% of remaining budget
-        af_points_budget = remaining_allocation[1] * budget
-        gifts["AF Points"] = math.floor(af_points_budget)
+    # Allocate remaining budget to Pack FOC
+    if remaining_budget > 0:
+        pack_foc_quantity = min(math.floor(remaining_budget / 38), max_quantities["Pack FOC"])
+        gift_quantities["Pack FOC"] = pack_foc_quantity
     
-    return gifts
+    return gift_quantities
 
 def calculate_budget_from_roi(order_data, target_roi_percentage):
     """
@@ -87,11 +62,11 @@ def calculate_budget_from_roi(order_data, target_roi_percentage):
     Returns:
         float: Budget needed to achieve the target ROI
     """
-    # The ROI is now a direct percentage of the total invoice value
-    total_order_value = order_data["total_value"]
+    # Calculate budget as a percentage of total order value
+    budget = order_data["total_value"] * (target_roi_percentage / 100)
     
-    # Budget is simply the target ROI percentage of the total order value
-    budget = (target_roi_percentage / 100) * total_order_value
+    # Round to 2 decimal places
+    budget = round(budget, 2)
     
     return budget
 
@@ -107,48 +82,40 @@ def optimize_budget(order_data, customer_type, target_roi_percentage):
     Returns:
         dict: Optimized gift quantities
     """
-    # Check eligibility
-    quantities = order_data["quantities"]
-    is_eligible = (
-        quantities.get("50g", 0) >= 10 or
-        quantities.get("250g", 0) >= 3 or
-        quantities.get("1kg", 0) >= 2
-    )
-    
-    if not is_eligible:
-        return {
-            "Pack FOC": 0,
-            "Hookah": 0,
-            "AF Points": 0
-        }
-    
-    # Calculate budget needed for target ROI
+    # Calculate budget based on target ROI
     budget = calculate_budget_from_roi(order_data, target_roi_percentage)
     
-    # Start with initial recommendation
+    # Recommend gifts based on the calculated budget
     gifts = recommend_gift(order_data, customer_type, budget)
     
-    # Calculate current budget usage
-    total_value = order_data["total_value"]
-    current_budget_usage = (
-        gifts["Pack FOC"] * 38 +
-        gifts["Hookah"] * 400 +
-        gifts["AF Points"] * 1
-    )
+    # Calculate actual ROI with recommended gifts
+    actual_roi = calculate_roi(order_data, gifts, budget)
     
-    # Try to optimize budget usage
-    remaining_budget = budget - current_budget_usage
-    
-    # If there's budget remaining, try to allocate it
-    if remaining_budget > 38:  # If we can afford at least one more Pack FOC
-        additional_packs = math.floor(remaining_budget / 38)
-        gifts["Pack FOC"] += additional_packs
-        remaining_budget -= additional_packs * 38
-    
-    # If still budget remaining, allocate to AF Points
-    if remaining_budget > 1:
-        additional_points = math.floor(remaining_budget)
-        gifts["AF Points"] += additional_points
+    # Fine-tune the allocation by adjusting pack gifts
+    # Add or remove individual Pack FOC as needed
+    while abs(actual_roi - target_roi_percentage) > 0.1:
+        if actual_roi > target_roi_percentage:
+            # ROI is too high, reduce Pack FOC if possible
+            if gifts["Pack FOC"] > 0:
+                gifts["Pack FOC"] -= 1
+            else:
+                # Can't reduce Pack FOC further, try to reduce Hookah
+                if gifts["Hookah"] > 0:
+                    gifts["Hookah"] -= 1
+                else:
+                    # Can't reduce further
+                    break
+        else:
+            # ROI is too low, increase Pack FOC if budget allows
+            max_quantities = get_max_gift_quantities(budget, customer_type, order_data['total_value'])
+            if gifts["Pack FOC"] < max_quantities["Pack FOC"]:
+                gifts["Pack FOC"] += 1
+            else:
+                # Can't increase further
+                break
+        
+        # Recalculate actual ROI
+        actual_roi = calculate_roi(order_data, gifts, budget)
     
     return gifts
 
@@ -164,21 +131,16 @@ def calculate_roi(order_data, gifts, budget):
     Returns:
         float: ROI percentage
     """
-    total_value = order_data["total_value"]
-    
-    # If no budget or order value, ROI is 0
-    if budget == 0 or total_value == 0:
-        return 0
-    
-    # Calculate the actual cost of all the gifts
-    # Removed Cash Back from calculation
-    actual_cost = (
-        gifts.get("Pack FOC", 0) * 38 +
-        gifts.get("Hookah", 0) * 400 +
-        gifts.get("AF Points", 0) * 1
+    # Calculate total gift value
+    gift_value = (
+        calculate_gift_value("Pack FOC", gifts.get("Pack FOC", 0)) +
+        calculate_gift_value("Hookah", gifts.get("Hookah", 0))
     )
     
-    # ROI is simply the percentage of the total order value that is being given as gifts
-    roi = (actual_cost / total_value) * 100
+    # Calculate ROI as a percentage
+    if order_data["total_value"] > 0:
+        roi_percentage = (gift_value / order_data["total_value"]) * 100
+    else:
+        roi_percentage = 0
     
-    return round(roi, 2)
+    return round(roi_percentage, 2)

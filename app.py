@@ -65,8 +65,7 @@ def display_gift_summary(gifts, budget, customer_type, order_data, gift_values=N
     if gift_values is None:
         gift_values = {
             "Pack FOC": gifts.get("Pack FOC", 0) * 38,
-            "Hookah": gifts.get("Hookah", 0) * 400,
-            "AF Points": gifts.get("AF Points", 0) * 1
+            "Hookah": gifts.get("Hookah", 0) * 400
         }
 
     # Create DataFrame for gift summary
@@ -120,7 +119,6 @@ def display_gift_summary(gifts, budget, customer_type, order_data, gift_values=N
         {"Category": "Order Information", "Item": "Number of 1kg Packs", "Value": str(order_data['quantities'].get('1kg', 0))},
         {"Category": "Gift Details", "Item": "Pack FOC Quantity", "Value": str(gifts.get("Pack FOC", 0))},
         {"Category": "Gift Details", "Item": "Hookah Quantity", "Value": str(gifts.get("Hookah", 0))},
-        {"Category": "Gift Details", "Item": "AF Points Quantity", "Value": str(gifts.get("AF Points", 0))},
         {"Category": "Budget Information", "Item": "Available Budget", "Value": f"${budget:.2f}"},
         {"Category": "Budget Information", "Item": "Total Gift Value", "Value": f"${total_gift_value:.2f}"},
         {"Category": "Budget Information", "Item": "Remaining Budget", "Value": f"${remaining_budget:.2f}"},
@@ -173,22 +171,17 @@ def adjust_gifts_for_tier_roi(order_data, eligible_tier, custom_gifts, budget):
     # Clone the gifts to avoid modifying the original
     adjusted_gifts = custom_gifts.copy()
 
-    # Gradually reduce AF Points until ROI is below or equal to target
+    # Gradually reduce Pack FOC until ROI is below or equal to target
     while calculate_roi(order_data, adjusted_gifts, budget) > target_roi:
-        # If AF Points are already 0, reduce Pack FOC
-        if adjusted_gifts.get("AF Points", 0) <= 0:
-            if adjusted_gifts.get("Pack FOC", 0) > 0:
-                adjusted_gifts["Pack FOC"] = max(0, adjusted_gifts["Pack FOC"] - 1)
-            else:
-                # If Pack FOC is also 0, reduce Hookah if present
-                if adjusted_gifts.get("Hookah", 0) > 0:
-                    adjusted_gifts["Hookah"] = max(0, adjusted_gifts["Hookah"] - 1)
-                else:
-                    # Cannot reduce further
-                    break
+        if adjusted_gifts.get("Pack FOC", 0) > 0:
+            adjusted_gifts["Pack FOC"] = max(0, adjusted_gifts["Pack FOC"] - 1)
         else:
-            # Reduce AF Points by 10 at a time
-            adjusted_gifts["AF Points"] = max(0, adjusted_gifts["AF Points"] - 10)
+            # If Pack FOC is also 0, reduce Hookah if present
+            if adjusted_gifts.get("Hookah", 0) > 0:
+                adjusted_gifts["Hookah"] = max(0, adjusted_gifts["Hookah"] - 1)
+            else:
+                # Cannot reduce further
+                break
 
     return adjusted_gifts
 
@@ -207,7 +200,7 @@ def reset_all_calculations():
 
     # Clear all custom gift related session state
     custom_gift_keys = [
-        'custom_pack_foc', 'custom_hookah', 'custom_af_points', 
+        'custom_pack_foc', 'custom_hookah',
         'original_gifts', 'custom_gifts', 'applied_custom_gifts'
     ]
     for key in custom_gift_keys:
@@ -325,274 +318,131 @@ def main():
         st.success(f"Eligible for **{eligible_tier}** tier")
     else:
         st.warning(f"Order Total: ${order_data['total_value']:.2f} - Total Weight: {total_grams/1000:.1f}kg")
-        st.warning("Not eligible for gifts. Minimum order quantity: 6kg or 10+ packs of 50g, 3+ packs of 250g, or 2+ packs of 1kg.")
+        st.warning("This order is not eligible for gifts yet. Minimum order requirement: 6kg or more.")
 
-    # If eligible, show gift options
-    if is_eligible:
+    # Check gift eligibility based on specific product quantities
+    product_eligible = is_eligible_for_gift(order_data)
+    
+    # Show the gift eligibility status
+    if is_eligible and product_eligible:
+        st.success("This order qualifies for promotional gifts!")
+    elif is_eligible and not product_eligible:
+        st.warning("Order meets tier weight requirements but not product mix requirements. Need 10+ packs of 50g, 3+ packs of 250g, or 2+ packs of 1kg.")
+        return  # Skip gift calculations if not eligible
+    elif not is_eligible:
+        st.warning("This order does not meet the minimum requirements for gifts.")
+        return  # Skip gift calculations if not eligible
 
-        tier_info = {
-            "Silver": {"roi": 5, "index": 0},
-            "Gold": {"roi": 7, "index": 1},
-            "Diamond": {"roi": 9, "index": 2},
-            "Platinum": {"roi": 13, "index": 3}
-        }
+    # Target ROI selection based on tier
+    tier_roi = {
+        'Silver': 5.0,
+        'Gold': 7.0,
+        'Diamond': 9.0,
+        'Platinum': 13.0
+    }
+    target_roi = tier_roi.get(eligible_tier, 5.0)
 
-        # Create tabs for different gift optimization approaches
-        gift_tabs = st.tabs(["Recommended Gifts", "Custom Gifts"])
+    # Gift calculation section
+    st.header("Gift Calculator")
 
-        with gift_tabs[0]:
-            # Display eligible tier information
-            tier_roi = 5  # Default ROI for Silver tier
-            if eligible_tier == "Gold":
-                tier_roi = 7
-            elif eligible_tier == "Diamond":
-                tier_roi = 9
-            elif eligible_tier == "Platinum":
-                tier_roi = 13
+    # Add option to use custom ROI
+    use_custom_roi = st.checkbox("Use Custom ROI")
+    
+    if use_custom_roi:
+        target_roi = st.slider("Target ROI (%)", min_value=1.0, max_value=20.0, value=target_roi, step=0.5)
 
-            st.info(f"Based on your order quantity ({total_grams/1000:.1f}kg) and product mix, you are eligible for the **{eligible_tier}** tier with {tier_roi}% ROI.")
+    # Calculate budget based on the selected ROI
+    budget = calculate_budget_from_roi(order_data, target_roi)
+    st.info(f"Available Budget: ${budget:.2f} (based on {target_roi:.1f}% ROI)")
 
-            # Use tier automatically determined by order quantity
-            target_roi = tier_roi
+    # Get gift recommendation
+    recommended_gifts = recommend_gift(order_data, customer_type, budget)
+    
+    # Calculate the actual cost of recommended gifts
+    recommended_gift_value = {
+        "Pack FOC": recommended_gifts["Pack FOC"] * 38,
+        "Hookah": recommended_gifts["Hookah"] * 400
+    }
+    
+    # Store original gifts to compare with custom
+    if 'original_gifts' not in st.session_state:
+        st.session_state.original_gifts = recommended_gifts.copy()
 
-            # Calculate budget based on ROI
-            budget = calculate_budget_from_roi(order_data, target_roi)
+    # Check if custom gift adjustment is requested
+    custom_mode = st.checkbox("Customize Gifts")
 
-            # Get optimized gift allocation
-            gifts = optimize_budget(order_data, customer_type, target_roi)
-
-            # Calculate gift values
-            gift_values = {
-                "Pack FOC": gifts.get("Pack FOC", 0) * 38,
-                "Hookah": gifts.get("Hookah", 0) * 400,
-                "AF Points": gifts.get("AF Points", 0) * 1
-            }
-
-            # Display gift summary
-            display_gift_summary(gifts, budget, customer_type, order_data, gift_values)
-
-            # Add Reset Calculation button
-            if st.button("Reset Calculation", key="reset_rec_button"):
-                # Reset all calculations
-                reset_all_calculations()
-                st.rerun()
-
-        with gift_tabs[1]:
-            # Custom gift allocation
-            st.subheader("Custom Gift Allocation")
-
-            # Display eligible tier information
-            tier_roi = 5  # Default ROI for Silver tier
-            if eligible_tier == "Gold":
-                tier_roi = 7
-            elif eligible_tier == "Diamond":
-                tier_roi = 9
-            elif eligible_tier == "Platinum":
-                tier_roi = 13
-
-            st.info(f"Based on your order quantity ({total_grams/1000:.1f}kg) and product mix, you are eligible for the **{eligible_tier}** tier with {tier_roi}% ROI.")
-
-            # Use the automatically determined tier
-            budget = calculate_budget_from_roi(order_data, tier_roi)
-
-            # Display available budget
-            st.write(f"Available Budget: ${budget:.2f}")
-
-            # Get maximum gift quantities based on budget
-            max_quantities = get_max_gift_quantities(budget, customer_type, order_data['total_value'])
-
-            # Get initial recommendation as starting point
-            recommended_gifts = recommend_gift(order_data, customer_type, budget)
-
-            # Initialize custom gift values in session state if not present
-            if 'custom_pack_foc' not in st.session_state:
-                st.session_state.custom_pack_foc = int(recommended_gifts["Pack FOC"])
-
-            if 'custom_hookah' not in st.session_state:
-                st.session_state.custom_hookah = int(recommended_gifts["Hookah"] if customer_type == CustomerType.TOBACCO_SHOP else 0)
-
-            if 'custom_af_points' not in st.session_state:
-                st.session_state.custom_af_points = int(recommended_gifts["AF Points"])
-
-            # Store original values for ROI comparison
-            if 'original_gifts' not in st.session_state:
-                st.session_state.original_gifts = {
-                    "Pack FOC": int(recommended_gifts["Pack FOC"]),
-                    "Hookah": int(recommended_gifts["Hookah"] if customer_type == CustomerType.TOBACCO_SHOP else 0),
-                    "AF Points": int(recommended_gifts["AF Points"])
-                }
-
-            st.write("### Adjust gift quantities:")
-
-            # Pack FOC slider
-            custom_pack_foc = st.slider(
-                "Pack FOC (38$ each)",
-                min_value=0,
+    if custom_mode:
+        st.subheader("Custom Gift Allocation")
+        
+        # Get maximum gift quantities based on budget
+        max_quantities = get_max_gift_quantities(budget, customer_type, order_data['total_value'])
+        
+        # Store custom gifts in session state to persist during re-renders
+        if 'custom_pack_foc' not in st.session_state:
+            st.session_state.custom_pack_foc = recommended_gifts["Pack FOC"]
+        if 'custom_hookah' not in st.session_state:
+            st.session_state.custom_hookah = recommended_gifts["Hookah"]
+        
+        # Custom input fields with recommended values as defaults
+        custom_cols = st.columns(2)
+        
+        with custom_cols[0]:
+            st.session_state.custom_pack_foc = st.number_input(
+                "Pack FOC Quantity", 
+                min_value=0, 
                 max_value=max_quantities["Pack FOC"],
-                value=st.session_state.custom_pack_foc,
-                key="pack_foc_slider_auto"
+                value=st.session_state.custom_pack_foc
             )
-
-            # Hookah slider (only for tobacco shops)
+            
+        with custom_cols[1]:
             if customer_type == CustomerType.TOBACCO_SHOP:
-                custom_hookah = st.slider(
-                    "Hookah (400$ each)",
-                    min_value=0,
+                st.session_state.custom_hookah = st.number_input(
+                    "Hookah Quantity", 
+                    min_value=0, 
                     max_value=max_quantities["Hookah"],
-                    value=st.session_state.custom_hookah,
-                    key="hookah_slider_auto"
+                    value=st.session_state.custom_hookah
                 )
             else:
-                custom_hookah = 0
-
-            # AF Points slider
-            max_points = int(max(budget, 1000))  # Use a reasonable max cap
-            custom_af_points = st.slider(
-                "AF Points (1$ each)",
-                min_value=0,
-                max_value=max_points,
-                value=st.session_state.custom_af_points,
-                key="af_points_slider_auto"
-            )
-
-            # Update session state values immediately
-            st.session_state.custom_pack_foc = custom_pack_foc
-            st.session_state.custom_hookah = custom_hookah
-            st.session_state.custom_af_points = custom_af_points
-
-            # Process gift calculations
-            # Session state values are already updated by the sliders
-
-            # Always use session state values for calculations
-            custom_gifts = {
-                "Pack FOC": st.session_state.custom_pack_foc,
-                "Hookah": st.session_state.custom_hookah,
-                "AF Points": st.session_state.custom_af_points
-            }
-
-            # Apply ROI limits for the tier
-            custom_gifts = adjust_gifts_for_tier_roi(order_data, eligible_tier, custom_gifts, budget)
-
-            # If gifts were adjusted, update session state
-            if custom_gifts["Pack FOC"] != st.session_state.custom_pack_foc:
-                st.session_state.custom_pack_foc = custom_gifts["Pack FOC"]
-
-            if custom_gifts["Hookah"] != st.session_state.custom_hookah:
-                st.session_state.custom_hookah = custom_gifts["Hookah"]
-
-            if custom_gifts["AF Points"] != st.session_state.custom_af_points:
-                st.session_state.custom_af_points = custom_gifts["AF Points"]
-
-                # Store updated gifts in session state
-            st.session_state.custom_gifts = custom_gifts
-
-            # Calculate gift values
+                st.info("Hookahs are only available for Tobacco Shops")
+                st.session_state.custom_hookah = 0
+        
+        # Create custom gifts dictionary
+        custom_gifts = {
+            "Pack FOC": st.session_state.custom_pack_foc,
+            "Hookah": st.session_state.custom_hookah
+        }
+        
+        # Store custom gifts in session state
+        st.session_state.custom_gifts = custom_gifts
+        
+        # Button to apply custom allocation
+        if st.button("Apply Custom Allocation"):
+            st.session_state.applied_custom_gifts = custom_gifts.copy()
+            st.success("Custom gift allocation applied!")
+            
+        # Check if we have applied custom gifts
+        if 'applied_custom_gifts' in st.session_state:
+            # Adjust custom gifts to maintain tier ROI if needed
+            adjusted_gifts = st.session_state.applied_custom_gifts
+            
+            # Calculate custom gift values
             custom_gift_values = {
-                "Pack FOC": custom_gifts["Pack FOC"] * 38,
-                "Hookah": custom_gifts["Hookah"] * 400,
-                "AF Points": custom_gifts["AF Points"] * 1
+                "Pack FOC": adjusted_gifts["Pack FOC"] * 38,
+                "Hookah": adjusted_gifts["Hookah"] * 400
             }
+            
+            # Display the custom gift summary
+            st.subheader("Custom Gift Summary")
+            display_gift_summary(adjusted_gifts, budget, customer_type, order_data, custom_gift_values)
+    else:
+        # Display the recommended gift summary
+        st.subheader("Recommended Gift Allocation")
+        display_gift_summary(recommended_gifts, budget, customer_type, order_data, recommended_gift_value)
 
-            # Create DataFrame for gift summary
-            gift_df = pd.DataFrame({
-                "Gift Type": list(custom_gift_values.keys()),
-                "Quantity": [custom_gifts.get(gift, 0) for gift in custom_gift_values.keys()],
-                "Value": [custom_gift_values[gift] for gift in custom_gift_values.keys()]
-            })
-
-            # Create button row for additional actions
-            button_cols = st.columns(2)
-
-            with button_cols[0]:
-                # Add Reset Calculation button
-                if st.button("Reset Calculation", key="reset_custom_button_alt"):
-                    # Reset all calculations
-                    reset_all_calculations()
-                    st.rerun()
-
-            with button_cols[1]:
-                # Add "Apply Custom Gift" button
-                if st.button("Apply Custom Gift", key="apply_custom_gift_alt", type="primary"):
-                    st.session_state.applied_custom_gifts = custom_gifts.copy()
-                    st.success("Custom gift allocation applied successfully!")
-
-            # Display gift summary in a table
-            st.write("### Gift Summary")
-            st.dataframe(gift_df, use_container_width=True)
-
-            # Calculate total gift value and remaining budget
-            total_gift_value = sum(custom_gift_values.values())
-            remaining_budget = budget - total_gift_value
-
-            # Display budget metrics
-            budget_cols = st.columns(3)
-            with budget_cols[0]:
-                st.metric("Available Budget", f"${budget:.2f}")
-            with budget_cols[1]:
-                st.metric("Total Gift Value", f"${total_gift_value:.2f}")
-            with budget_cols[2]:
-                st.metric("Remaining Budget", f"${remaining_budget:.2f}")
-
-            # Calculate ROI metrics
-            roi_cols = st.columns(2)
-            with roi_cols[0]:
-                # Calculate actual ROI
-                actual_roi = calculate_roi(order_data, custom_gifts, budget)
-                st.metric("Actual ROI", f"{actual_roi:.2f}%")
-
-            with roi_cols[1]:
-                # Get target ROI based on tier
-                target_roi = tier_roi
-
-                # Compare with tier ROI
-                roi_diff = actual_roi - target_roi
-                st.metric(
-                    f"Target {eligible_tier} Tier ROI", 
-                    f"{target_roi:.2f}%",
-                    delta=f"{roi_diff:+.2f}%" if abs(roi_diff) > 0.1 else None
-                )
-
-                # Show warning if ROI is below target
-                if actual_roi < target_roi:
-                    st.warning(f"Warning: Current ROI ({actual_roi:.2f}%) is below the {eligible_tier} tier target ROI ({target_roi:.2f}%)")
-
-            # Create a pie chart showing gift value distribution
-            gift_values_filtered = {k: v for k, v in custom_gift_values.items() if v > 0}
-            if gift_values_filtered:
-                fig = px.pie(
-                    values=list(gift_values_filtered.values()),
-                    names=list(gift_values_filtered.keys()),
-                    title="Gift Value Distribution"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            # Create export data
-            export_data = pd.DataFrame([
-                {"Category": "Customer Information", "Item": "Customer Name", "Value": st.session_state.customer_name if st.session_state.customer_name else "N/A"},
-                {"Category": "Customer Information", "Item": "Customer Address", "Value": st.session_state.customer_address if st.session_state.customer_address else "N/A"},
-                {"Category": "Customer Information", "Item": "Customer Type", "Value": "Tobacco Shop" if customer_type == CustomerType.TOBACCO_SHOP else "Retailer"},
-                {"Category": "Order Information", "Item": "Total Order Value", "Value": f"${order_data['total_value']:.2f}"},
-                {"Category": "Order Information", "Item": "Number of 50g Packs", "Value": str(order_data['quantities'].get('50g', 0))},
-                {"Category": "Order Information", "Item": "Number of 250g Packs", "Value": str(order_data['quantities'].get('250g', 0))},
-                {"Category": "Order Information", "Item": "Number of 1kg Packs", "Value": str(order_data['quantities'].get('1kg', 0))},
-                {"Category": "Gift Details", "Item": "Pack FOC Quantity", "Value": str(custom_gifts.get("Pack FOC", 0))},
-                {"Category": "Gift Details", "Item": "Hookah Quantity", "Value": str(custom_gifts.get("Hookah", 0))},
-                {"Category": "Gift Details", "Item": "AF Points Quantity", "Value": str(custom_gifts.get("AF Points", 0))},
-                {"Category": "Budget Information", "Item": "Available Budget", "Value": f"${budget:.2f}"},
-                {"Category": "Budget Information", "Item": "Total Gift Value", "Value": f"${total_gift_value:.2f}"},
-                {"Category": "Budget Information", "Item": "Remaining Budget", "Value": f"${remaining_budget:.2f}"},
-                {"Category": "Budget Information", "Item": "Actual ROI", "Value": f"{actual_roi:.2f}%"}
-            ])
-
-            # Create timestamp for filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            # Create download link
-            download_link = create_excel_download_link(export_data, f"al_fakher_custom_offer_{timestamp}.xlsx")
-
-            # Display download link
-            st.markdown(download_link, unsafe_allow_html=True)
-
+    # Reset button to clear all calculations
+    if st.button("Reset Calculations"):
+        reset_all_calculations()
+        st.rerun()
 
 # Function to create a developer footer for the app
 def add_developer_footer():

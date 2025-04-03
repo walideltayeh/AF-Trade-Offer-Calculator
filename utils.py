@@ -94,7 +94,7 @@ def calculate_gift_value(gift_type, quantity, order_value=0):
     Calculate the monetary value of a gift
     
     Args:
-        gift_type (str): Type of gift (Pack FOC, Hookah, AF Points)
+        gift_type (str): Type of gift (Pack FOC, Hookah)
         quantity (float): Quantity of the gift
         order_value (float): Total order value (not used anymore)
         
@@ -105,9 +105,6 @@ def calculate_gift_value(gift_type, quantity, order_value=0):
         return quantity * 38
     elif gift_type == "Hookah":
         return quantity * 400
-    elif gift_type == "AF Points":
-        # Assume 1 AF Point is worth $1
-        return quantity * 1
     return 0
 
 def get_max_gift_quantities(budget, customer_type, order_value):
@@ -123,8 +120,7 @@ def get_max_gift_quantities(budget, customer_type, order_value):
         dict: Maximum quantities for each gift type
     """
     max_quantities = {
-        "Pack FOC": int(budget / 38),
-        "AF Points": int(budget / 1)  # Assuming 1 point = $1
+        "Pack FOC": int(budget / 38)
     }
     
     # Only Tobacco Shops can get hookahs

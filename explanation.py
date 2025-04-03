@@ -47,9 +47,8 @@ def main():
     - If budget ≥ $400 and order weight > 100kg: Up to 2 hookahs
     - If budget ≥ $400 and order weight > 50kg: 1 hookah
     
-    2. **Remaining Budget Distribution**
-    - 60% for Pack FOC (Free of Charge Packs)
-    - 40% for AF Points
+    2. **Remaining Budget** 
+    - 100% for Pack FOC (Free of Charge Packs)
     
     Each Pack FOC costs $38 in the calculation.
     """)
@@ -73,7 +72,6 @@ def main():
     Where Total Gift Value includes:
     - Number of FOC Packs × $38
     - Number of Hookahs × $400
-    - AF Points (1 point = $1)
     ```
     """)
 

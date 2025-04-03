@@ -1,17 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 import plotly.express as px
-
-# Define constants for pricing and packaging
-PRICE_50G_MC = 3936  # Price for 1 Master Case of 50g (120 packs)
-PRICE_250G_MC = 4243.5  # Price for 1 Master Case of 250g (24 packs)
-PRICE_1KG_MC = 3833  # Price for 1 Master Case of 1kg (6 packs)
-
-PACKS_50G_MC = 120  # Packs per Master Case of 50g
-PACKS_250G_MC = 24  # Packs per Master Case of 250g
-PACKS_1KG_MC = 6    # Packs per Master Case of 1kg
+import plotly.graph_objects as go
+from models import CustomerType
 
 def calculate_investment(
     total_master_cases,
@@ -25,290 +17,359 @@ def calculate_investment(
     retail_percent,
     tobacco_shop_percent
 ):
-    # Calculate number of master cases by type
-    mc_50g = total_master_cases * (mc_50g_percent / 100)
-    mc_250g = total_master_cases * (mc_250g_percent / 100)
-    mc_1kg = total_master_cases * (mc_1kg_percent / 100)
+    """
+    Calculate investment requirements for gift programs
     
-    # Calculate total value by product type
-    value_50g = mc_50g * PRICE_50G_MC
-    value_250g = mc_250g * PRICE_250G_MC
-    value_1kg = mc_1kg * PRICE_1KG_MC
+    Args:
+        total_master_cases (float): Total number of master cases
+        mc_50g_percent (float): Percentage of 50g master cases
+        mc_250g_percent (float): Percentage of 250g master cases
+        mc_1kg_percent (float): Percentage of 1kg master cases
+        silver_percent (float): Percentage of silver tier orders
+        gold_percent (float): Percentage of gold tier orders
+        diamond_percent (float): Percentage of diamond tier orders
+        platinum_percent (float): Percentage of platinum tier orders
+        retail_percent (float): Percentage of retail customers
+        tobacco_shop_percent (float): Percentage of tobacco shop customers
+        
+    Returns:
+        dict: Dictionary containing investment calculation results
+    """
+    # Validate percentage inputs sum to 100%
+    if abs(mc_50g_percent + mc_250g_percent + mc_1kg_percent - 100) > 0.001:
+        return {"error": "Size percentages must sum to 100%"}
+    if abs(silver_percent + gold_percent + diamond_percent + platinum_percent - 100) > 0.001:
+        return {"error": "Tier percentages must sum to 100%"}
+    if abs(retail_percent + tobacco_shop_percent - 100) > 0.001:
+        return {"error": "Customer type percentages must sum to 100%"}
+    
+    # Calculate master cases by size
+    mc_50g = (total_master_cases * mc_50g_percent) / 100
+    mc_250g = (total_master_cases * mc_250g_percent) / 100
+    mc_1kg = (total_master_cases * mc_1kg_percent) / 100
+    
+    # Calculate packs by size (master case quantities)
+    packs_50g = mc_50g * 10 * 12  # Each 50g Master Case has 10 cartons of 12 packs
+    packs_250g = mc_250g * 10 * 6  # Each 250g Master Case has 10 cartons of 6 packs
+    packs_1kg = mc_1kg * 10 * 2  # Each 1kg Master Case has 10 cartons of 2 packs
+    
+    # Calculate total order value by size and pack price
+    price_50g = 32.80
+    price_250g = 176.81
+    price_1kg = 638.83
+    
+    value_50g = packs_50g * price_50g
+    value_250g = packs_250g * price_250g
+    value_1kg = packs_1kg * price_1kg
+    
     total_value = value_50g + value_250g + value_1kg
     
-    # Calculate total weight in grams
-    weight_50g = mc_50g * PACKS_50G_MC * 50
-    weight_250g = mc_250g * PACKS_250G_MC * 250
-    weight_1kg = mc_1kg * PACKS_1KG_MC * 1000
-    total_weight = weight_50g + weight_250g + weight_1kg
+    # Calculate order values by tier
+    silver_value = (total_value * silver_percent) / 100
+    gold_value = (total_value * gold_percent) / 100
+    diamond_value = (total_value * diamond_percent) / 100
+    platinum_value = (total_value * platinum_percent) / 100
     
-    # Create customer segments
-    retail_value = total_value * (retail_percent / 100)
-    tobacco_shop_value = total_value * (tobacco_shop_percent / 100)
+    # Calculate budget by tier using ROI percentages
+    silver_roi = 5.0 / 100
+    gold_roi = 7.0 / 100
+    diamond_roi = 9.0 / 100
+    platinum_roi = 13.0 / 100
     
-    # Create tier segments
-    silver_value = total_value * (silver_percent / 100)
-    gold_value = total_value * (gold_percent / 100)
-    diamond_value = total_value * (diamond_percent / 100)
-    platinum_value = total_value * (platinum_percent / 100)
+    silver_budget = silver_value * silver_roi
+    gold_budget = gold_value * gold_roi
+    diamond_budget = diamond_value * diamond_roi
+    platinum_budget = platinum_value * platinum_roi
     
-    # Define tier ROI percentages
-    silver_roi = 5
-    gold_roi = 7
-    diamond_roi = 9
-    platinum_roi = 13
-    
-    # Calculate gift budgets by tier
-    silver_budget = silver_value * (silver_roi / 100)
-    gold_budget = gold_value * (gold_roi / 100)
-    diamond_budget = diamond_value * (diamond_roi / 100)
-    platinum_budget = platinum_value * (platinum_roi / 100)
     total_budget = silver_budget + gold_budget + diamond_budget + platinum_budget
     
-    # Calculate gift budgets by customer type
-    retail_budget = (
-        (silver_value * (retail_percent / 100) * (silver_roi / 100)) +
-        (gold_value * (retail_percent / 100) * (gold_roi / 100)) +
-        (diamond_value * (retail_percent / 100) * (diamond_roi / 100)) +
-        (platinum_value * (retail_percent / 100) * (platinum_roi / 100))
-    )
+    # Calculate customer split
+    retail_value = (total_value * retail_percent) / 100
+    tobacco_shop_value = (total_value * tobacco_shop_percent) / 100
     
-    tobacco_shop_budget = (
-        (silver_value * (tobacco_shop_percent / 100) * (silver_roi / 100)) +
-        (gold_value * (tobacco_shop_percent / 100) * (gold_roi / 100)) +
-        (diamond_value * (tobacco_shop_percent / 100) * (diamond_roi / 100)) +
-        (platinum_value * (tobacco_shop_percent / 100) * (platinum_roi / 100))
-    )
-    
-    # Net revenue after gifts
-    net_revenue = total_value - total_budget
-    
+    # Return calculation results
     return {
-        "master_cases": {
-            "50g": mc_50g,
-            "250g": mc_250g,
-            "1kg": mc_1kg,
-            "total": total_master_cases
-        },
-        "value": {
-            "50g": value_50g,
-            "250g": value_250g,
-            "1kg": value_1kg,
-            "total": total_value
-        },
-        "weight_grams": {
-            "50g": weight_50g,
-            "250g": weight_250g,
-            "1kg": weight_1kg,
-            "total": total_weight
-        },
-        "customer_segments": {
-            "retail": retail_value,
-            "tobacco_shop": tobacco_shop_value
-        },
-        "tier_segments": {
-            "silver": silver_value,
-            "gold": gold_value,
-            "diamond": diamond_value,
-            "platinum": platinum_value
-        },
-        "gift_budgets": {
-            "silver": silver_budget,
-            "gold": gold_budget,
-            "diamond": diamond_budget,
-            "platinum": platinum_budget,
-            "total": total_budget,
-            "retail": retail_budget,
-            "tobacco_shop": tobacco_shop_budget
-        },
-        "net_revenue": net_revenue,
-        "roi_summary": {
-            "silver": silver_roi,
-            "gold": gold_roi,
-            "diamond": diamond_roi,
-            "platinum": platinum_roi,
-            "weighted_average": (
-                (silver_roi * silver_percent) +
-                (gold_roi * gold_percent) +
-                (diamond_roi * diamond_percent) +
-                (platinum_roi * platinum_percent)
-            ) / 100
-        }
+        "mc_50g": mc_50g,
+        "mc_250g": mc_250g,
+        "mc_1kg": mc_1kg,
+        "packs_50g": packs_50g,
+        "packs_250g": packs_250g,
+        "packs_1kg": packs_1kg,
+        "value_50g": value_50g,
+        "value_250g": value_250g,
+        "value_1kg": value_1kg,
+        "total_value": total_value,
+        "silver_value": silver_value,
+        "gold_value": gold_value,
+        "diamond_value": diamond_value,
+        "platinum_value": platinum_value,
+        "silver_budget": silver_budget,
+        "gold_budget": gold_budget,
+        "diamond_budget": diamond_budget,
+        "platinum_budget": platinum_budget,
+        "total_budget": total_budget,
+        "retail_value": retail_value,
+        "tobacco_shop_value": tobacco_shop_value
     }
 
 def main():
     st.title("Investment Calculator")
     
-    # Create two columns for the sidebar
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.subheader("Product Mix")
-        
-        total_mc = st.number_input(
-            "Total Master Cases", 
-            min_value=1, 
-            value=1000,
-            help="Total number of master cases across all product sizes"
-        )
-        
-        # Create expandable section for product mix
-        with st.expander("Product Mix Percentages (must sum to 100%)", expanded=True):
-            mc_50g_percent = st.slider("50g Master Cases %", 0, 100, 85, key="mc_50g")
-            mc_250g_percent = st.slider("250g Master Cases %", 0, 100, 10, key="mc_250g")
-            mc_1kg_percent = st.slider("1kg Master Cases %", 0, 100, 5, key="mc_1kg")
-            
-            # Validate that percentages sum to 100%
-            product_sum = mc_50g_percent + mc_250g_percent + mc_1kg_percent
-            if product_sum != 100:
-                st.warning(f"Product mix percentages sum to {product_sum}%, not 100%. Please adjust.")
+    st.markdown("""
+    This calculator helps you forecast the investment required for your gift program.
+    Enter your projected sales and distribution to see the estimated budget requirements.
+    """)
     
-    with col2:
-        st.subheader("Customer Distribution")
+    with st.container():
+        st.header("Sales Projection")
         
-        # Create expandable section for customer distribution
-        with st.expander("Customer Type Percentages (must sum to 100%)", expanded=True):
-            retail_percent = st.slider("Retail Customers %", 0, 100, 50, key="retail")
-            tobacco_shop_percent = st.slider("Tobacco Shop Customers %", 0, 100, 50, key="tobacco")
-            
-            # Validate that percentages sum to 100%
-            customer_sum = retail_percent + tobacco_shop_percent
-            if customer_sum != 100:
-                st.warning(f"Customer type percentages sum to {customer_sum}%, not 100%. Please adjust.")
+        # Master case input
+        total_master_cases = st.number_input("Total Master Cases", min_value=1.0, value=100.0, step=1.0)
         
-        # Create expandable section for tier distribution
-        with st.expander("Tier Distribution Percentages (must sum to 100%)", expanded=True):
-            silver_percent = st.slider("Silver Tier %", 0, 100, 80, key="silver")
-            gold_percent = st.slider("Gold Tier %", 0, 100, 10, key="gold")
-            diamond_percent = st.slider("Diamond Tier %", 0, 100, 7, key="diamond")
-            platinum_percent = st.slider("Platinum Tier %", 0, 100, 3, key="platinum")
-            
-            # Validate that percentages sum to 100%
-            tier_sum = silver_percent + gold_percent + diamond_percent + platinum_percent
-            if tier_sum != 100:
-                st.warning(f"Tier percentages sum to {tier_sum}%, not 100%. Please adjust.")
+        # Size distribution
+        st.subheader("Size Distribution (%)")
+        size_col1, size_col2, size_col3 = st.columns(3)
+        
+        with size_col1:
+            mc_50g_percent = st.number_input("50g Master Cases", min_value=0.0, max_value=100.0, value=70.0, step=1.0)
+        
+        with size_col2:
+            mc_250g_percent = st.number_input("250g Master Cases", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
+        
+        with size_col3:
+            mc_1kg_percent = st.number_input("1kg Master Cases", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
+        
+        # Display size distribution sum
+        size_sum = mc_50g_percent + mc_250g_percent + mc_1kg_percent
+        if abs(size_sum - 100) > 0.001:
+            st.warning(f"Size distribution total: {size_sum}% (should equal 100%)")
+        else:
+            st.success(f"Size distribution total: {size_sum}%")
     
-    # Calculate investment based on inputs
-    if (product_sum == 100 and customer_sum == 100 and tier_sum == 100):
-        results = calculate_investment(
-            total_mc,
-            mc_50g_percent,
-            mc_250g_percent,
-            mc_1kg_percent,
-            silver_percent,
-            gold_percent,
-            diamond_percent,
-            platinum_percent,
-            retail_percent,
-            tobacco_shop_percent
-        )
+    with st.container():
+        st.header("Tier Distribution")
         
-        # Display results
-        st.header("Investment Analysis")
+        # Tier distribution
+        st.subheader("Tier Distribution (%)")
+        tier_col1, tier_col2, tier_col3, tier_col4 = st.columns(4)
         
-        # Overall metrics
-        metric_cols = st.columns(3)
-        with metric_cols[0]:
-            st.metric("Total Order Value", f"${results['value']['total']:,.2f}")
-        with metric_cols[1]:
-            st.metric("Total Gift Budget", f"${results['gift_budgets']['total']:,.2f}")
-        with metric_cols[2]:
-            st.metric("Net Revenue", f"${results['net_revenue']:,.2f}")
+        with tier_col1:
+            silver_percent = st.number_input("Silver", min_value=0.0, max_value=100.0, value=40.0, step=1.0)
         
-        # Display detailed analysis with tabs
-        tabs = st.tabs(["Product Analysis", "Customer Analysis", "ROI Analysis"])
+        with tier_col2:
+            gold_percent = st.number_input("Gold", min_value=0.0, max_value=100.0, value=30.0, step=1.0)
         
-        with tabs[0]:
-            # Product mix pie chart
-            product_values = pd.DataFrame({
-                'Product': ['50g MC', '250g MC', '1kg MC'],
-                'Value': [results['value']['50g'], results['value']['250g'], results['value']['1kg']]
-            })
-            fig = px.pie(product_values, values='Value', names='Product', title='Order Value by Product')
-            st.plotly_chart(fig, use_container_width=True)
+        with tier_col3:
+            diamond_percent = st.number_input("Diamond", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
+        
+        with tier_col4:
+            platinum_percent = st.number_input("Platinum", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
+        
+        # Display tier distribution sum
+        tier_sum = silver_percent + gold_percent + diamond_percent + platinum_percent
+        if abs(tier_sum - 100) > 0.001:
+            st.warning(f"Tier distribution total: {tier_sum}% (should equal 100%)")
+        else:
+            st.success(f"Tier distribution total: {tier_sum}%")
+    
+    with st.container():
+        st.header("Customer Distribution")
+        
+        # Customer type distribution
+        st.subheader("Customer Type Distribution (%)")
+        customer_col1, customer_col2 = st.columns(2)
+        
+        with customer_col1:
+            retail_percent = st.number_input("Retailers", min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+        
+        with customer_col2:
+            tobacco_shop_percent = st.number_input("Tobacco Shops", min_value=0.0, max_value=100.0, value=40.0, step=1.0)
+        
+        # Display customer distribution sum
+        customer_sum = retail_percent + tobacco_shop_percent
+        if abs(customer_sum - 100) > 0.001:
+            st.warning(f"Customer distribution total: {customer_sum}% (should equal 100%)")
+        else:
+            st.success(f"Customer distribution total: {customer_sum}%")
+    
+    # Calculate button
+    if st.button("Calculate Investment"):
+        # Validate inputs
+        valid_inputs = True
+        if abs(size_sum - 100) > 0.001:
+            st.error("Size distribution must equal 100%")
+            valid_inputs = False
+        if abs(tier_sum - 100) > 0.001:
+            st.error("Tier distribution must equal 100%")
+            valid_inputs = False
+        if abs(customer_sum - 100) > 0.001:
+            st.error("Customer distribution must equal 100%")
+            valid_inputs = False
+        
+        if valid_inputs:
+            # Perform calculation
+            results = calculate_investment(
+                total_master_cases,
+                mc_50g_percent,
+                mc_250g_percent,
+                mc_1kg_percent,
+                silver_percent,
+                gold_percent,
+                diamond_percent,
+                platinum_percent,
+                retail_percent,
+                tobacco_shop_percent
+            )
             
-            # Product details table
-            st.write("Product Details:")
-            product_details = pd.DataFrame({
-                'Product': ['50g MC', '250g MC', '1kg MC', 'Total'],
-                'Master Cases': [
-                    f"{results['master_cases']['50g']:.1f}",
-                    f"{results['master_cases']['250g']:.1f}",
-                    f"{results['master_cases']['1kg']:.1f}",
-                    f"{results['master_cases']['total']:.1f}"
-                ],
-                'Value': [
-                    f"${results['value']['50g']:,.2f}",
-                    f"${results['value']['250g']:,.2f}",
-                    f"${results['value']['1kg']:,.2f}",
-                    f"${results['value']['total']:,.2f}"
-                ],
-                'Weight (kg)': [
-                    f"{results['weight_grams']['50g']/1000:,.1f}",
-                    f"{results['weight_grams']['250g']/1000:,.1f}",
-                    f"{results['weight_grams']['1kg']/1000:,.1f}",
-                    f"{results['weight_grams']['total']/1000:,.1f}"
+            if "error" in results:
+                st.error(results["error"])
+            else:
+                # Display results
+                st.header("Investment Results")
+                
+                # Order value breakdown
+                st.subheader("Order Value Breakdown")
+                value_cols = st.columns(4)
+                with value_cols[0]:
+                    st.metric("Total Order Value", f"${results['total_value']:,.2f}")
+                with value_cols[1]:
+                    st.metric("50g Value", f"${results['value_50g']:,.2f}")
+                with value_cols[2]:
+                    st.metric("250g Value", f"${results['value_250g']:,.2f}")
+                with value_cols[3]:
+                    st.metric("1kg Value", f"${results['value_1kg']:,.2f}")
+                
+                # Pack quantity breakdown
+                st.subheader("Pack Quantity Breakdown")
+                pack_cols = st.columns(3)
+                with pack_cols[0]:
+                    st.metric("50g Packs", f"{int(results['packs_50g']):,}")
+                with pack_cols[1]:
+                    st.metric("250g Packs", f"{int(results['packs_250g']):,}")
+                with pack_cols[2]:
+                    st.metric("1kg Packs", f"{int(results['packs_1kg']):,}")
+                
+                # Budget breakdown
+                st.subheader("Gift Budget Breakdown")
+                budget_cols = st.columns(5)
+                with budget_cols[0]:
+                    st.metric("Total Budget", f"${results['total_budget']:,.2f}")
+                with budget_cols[1]:
+                    st.metric("Silver Budget", f"${results['silver_budget']:,.2f}")
+                with budget_cols[2]:
+                    st.metric("Gold Budget", f"${results['gold_budget']:,.2f}")
+                with budget_cols[3]:
+                    st.metric("Diamond Budget", f"${results['diamond_budget']:,.2f}")
+                with budget_cols[4]:
+                    st.metric("Platinum Budget", f"${results['platinum_budget']:,.2f}")
+                
+                # Calculate ROI percentages
+                silver_roi = 5.0
+                gold_roi = 7.0
+                diamond_roi = 9.0
+                platinum_roi = 13.0
+                
+                # Budget allocation pie chart
+                st.subheader("Budget Allocation by Tier")
+                tier_labels = ["Silver", "Gold", "Diamond", "Platinum"]
+                tier_values = [
+                    results['silver_budget'],
+                    results['gold_budget'],
+                    results['diamond_budget'],
+                    results['platinum_budget']
                 ]
-            })
-            st.dataframe(product_details, use_container_width=True)
-            
-        with tabs[1]:
-            # Customer distribution
-            customer_cols = st.columns(2)
-            with customer_cols[0]:
-                st.metric("Retail Value", f"${results['customer_segments']['retail']:,.2f}")
-                st.metric("Retail Gift Budget", f"${results['gift_budgets']['retail']:,.2f}")
-            with customer_cols[1]:
-                st.metric("Tobacco Shop Value", f"${results['customer_segments']['tobacco_shop']:,.2f}")
-                st.metric("Tobacco Shop Gift Budget", f"${results['gift_budgets']['tobacco_shop']:,.2f}")
-            
-            # Customer comparison bar chart
-            customer_data = pd.DataFrame({
-                'Customer Type': ['Retail', 'Tobacco Shop'],
-                'Order Value': [results['customer_segments']['retail'], results['customer_segments']['tobacco_shop']],
-                'Gift Budget': [results['gift_budgets']['retail'], results['gift_budgets']['tobacco_shop']]
-            })
-            fig = px.bar(customer_data, x='Customer Type', y=['Order Value', 'Gift Budget'],
-                        title='Customer Segment Comparison', barmode='group')
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with tabs[2]:
-            # ROI summary
-            st.metric("Weighted Average ROI", f"{results['roi_summary']['weighted_average']:.2f}%")
-            
-            # ROI by tier
-            roi_data = pd.DataFrame({
-                'Tier': ['Silver', 'Gold', 'Diamond', 'Platinum'],
-                'ROI %': [
-                    results['roi_summary']['silver'],
-                    results['roi_summary']['gold'],
-                    results['roi_summary']['diamond'],
-                    results['roi_summary']['platinum']
-                ],
-                'Value': [
-                    results['tier_segments']['silver'],
-                    results['tier_segments']['gold'],
-                    results['tier_segments']['diamond'],
-                    results['tier_segments']['platinum']
-                ],
-                'Gift Budget': [
-                    results['gift_budgets']['silver'],
-                    results['gift_budgets']['gold'],
-                    results['gift_budgets']['diamond'],
-                    results['gift_budgets']['platinum']
-                ]
-            })
-            
-            # ROI comparison chart
-            fig = px.bar(roi_data, x='Tier', y=['Value', 'Gift Budget'],
-                        title='Value and Gift Budget by Tier', barmode='group')
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # ROI details table
-            roi_data['ROI %'] = roi_data['ROI %'].map('{:.1f}%'.format)
-            roi_data['Value'] = roi_data['Value'].map('${:,.2f}'.format)
-            roi_data['Gift Budget'] = roi_data['Gift Budget'].map('${:,.2f}'.format)
-            st.dataframe(roi_data, use_container_width=True)
+                tier_colors = ["#C0C0C0", "#FFD700", "#B9F2FF", "#E5E4E2"]
+                tier_roi_values = [silver_roi, gold_roi, diamond_roi, platinum_roi]
+                
+                fig1 = go.Figure(data=[go.Pie(
+                    labels=tier_labels,
+                    values=tier_values,
+                    hole=0.4,
+                    marker_colors=tier_colors
+                )])
+                fig1.update_layout(
+                    title_text="Budget Distribution by Tier",
+                    annotations=[dict(text=f"${results['total_budget']:,.0f}", x=0.5, y=0.5, font_size=16, showarrow=False)]
+                )
+                st.plotly_chart(fig1, use_container_width=True)
+                
+                # Budget breakdown table
+                budget_data = pd.DataFrame({
+                    "Tier": tier_labels,
+                    "Value": [results['silver_value'], results['gold_value'], results['diamond_value'], results['platinum_value']],
+                    "ROI %": tier_roi_values,
+                    "Budget": tier_values
+                })
+                budget_data["Value"] = budget_data["Value"].map("${:,.2f}".format)
+                budget_data["Budget"] = budget_data["Budget"].map("${:,.2f}".format)
+                budget_data["ROI %"] = budget_data["ROI %"].map("{}%".format)
+                
+                st.subheader("Budget Calculation Details")
+                st.table(budget_data)
+                
+                # Customer type breakdown
+                st.subheader("Customer Type Breakdown")
+                customer_cols = st.columns(2)
+                with customer_cols[0]:
+                    st.metric("Retailer Value", f"${results['retail_value']:,.2f}")
+                with customer_cols[1]:
+                    st.metric("Tobacco Shop Value", f"${results['tobacco_shop_value']:,.2f}")
+                
+                # Order size breakdown
+                size_labels = ["50g", "250g", "1kg"]
+                size_values = [results['value_50g'], results['value_250g'], results['value_1kg']]
+                
+                fig2 = go.Figure(data=[go.Pie(
+                    labels=size_labels,
+                    values=size_values,
+                    hole=0.4
+                )])
+                fig2.update_layout(
+                    title_text="Order Value by Product Size",
+                    annotations=[dict(text=f"${results['total_value']:,.0f}", x=0.5, y=0.5, font_size=16, showarrow=False)]
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # Overall program metrics
+                st.subheader("Overall Program Metrics")
+                metrics_cols = st.columns(3)
+                with metrics_cols[0]:
+                    budget_percentage = (results['total_budget'] / results['total_value']) * 100
+                    st.metric("Overall Budget %", f"{budget_percentage:.2f}%")
+                with metrics_cols[1]:
+                    packs_total = results['packs_50g'] + results['packs_250g'] + results['packs_1kg']
+                    st.metric("Total Packs", f"{int(packs_total):,}")
+                with metrics_cols[2]:
+                    budget_per_pack = results['total_budget'] / packs_total
+                    st.metric("Budget per Pack", f"${budget_per_pack:.2f}")
+                
+                # Gift type allocation estimates                
+                st.subheader("Estimated Gift Quantities")
+                
+                # Estimate Pack FOC and Hookah quantities
+                pack_foc_price = 38.0
+                hookah_price = 400.0
+                
+                # Assuming average distribution based on customer types
+                tobacco_budget = results['total_budget'] * (tobacco_shop_percent / 100)
+                retail_budget = results['total_budget'] * (retail_percent / 100)
+                
+                # Estimate for tobacco shops
+                tobacco_hookah_budget = min(tobacco_budget * 0.2, (tobacco_budget / hookah_price) * hookah_price)
+                tobacco_pack_foc_budget = tobacco_budget - tobacco_hookah_budget
+                
+                # Estimate for retailers (only Pack FOC)
+                retail_pack_foc_budget = retail_budget
+                
+                # Calculate estimated quantities
+                est_hookahs = int(tobacco_hookah_budget / hookah_price)
+                est_pack_foc = int((tobacco_pack_foc_budget + retail_pack_foc_budget) / pack_foc_price)
+                
+                gift_cols = st.columns(2)
+                with gift_cols[0]:
+                    st.metric("Estimated Pack FOC", f"{est_pack_foc:,}")
+                with gift_cols[1]:
+                    st.metric("Estimated Hookahs", f"{est_hookahs:,}")
 
 # Function to create a developer footer for the app
 def add_developer_footer():
